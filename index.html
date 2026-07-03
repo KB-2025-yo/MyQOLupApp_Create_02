@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台本翻訳ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EDEFF3;
+    --surface: #FFFFFF;
+    --ink: #1F2430;
+    --ink-soft: #5A6272;
+    --line: #D8DCE4;
+    --primary: #3A5199;
+    --primary-dark: #2C3E75;
+    --danger: #C0392B;
+    --ok: #1E7E4B;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(31,36,48,.08), 0 4px 14px rgba(31,36,48,.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 16px;
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 {
+    font-family: "Shippori Mincho", serif;
+    font-size: 1.15rem; margin: 0; letter-spacing: .06em;
+  }
+  header h1 .sub { font-family: inherit; font-size: .72rem; color: var(--ink-soft); font-weight: 400; margin-left: 8px; letter-spacing: .02em; }
+  .spacer { flex: 1; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px 12px 80px; }
+  section.panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: .85rem; margin: 0 0 12px;
+    color: var(--ink-soft); font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  button {
+    font-family: inherit; font-size: .85rem; cursor: pointer;
+    border-radius: 8px; border: 1px solid var(--line);
+    background: #F5F6F9; color: var(--ink);
+    padding: 7px 12px; transition: background .15s, border-color .15s;
+  }
+  button:hover { background: #EBEDF3; }
+  button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+  button.primary:hover { background: var(--primary-dark); }
+  button.ghost-danger { color: var(--danger); background: none; border: none; padding: 4px 6px; font-size: .8rem; }
+  button.icon { padding: 4px 8px; line-height: 1; font-size: .9rem; }
+  button:disabled { opacity: .5; cursor: default; }
+
+  input[type="text"], textarea, select {
+    font-family: inherit; font-size: .95rem;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; background: #FCFCFD; color: var(--ink);
+    width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+  textarea { resize: vertical; min-height: 52px; }
+
+  /* --- characters --- */
+  .char-row {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 8px; border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 8px; background: #FAFBFC;
+  }
+  .char-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+  .char-row input.name { flex: 1 1 120px; min-width: 100px; }
+  .char-row input.romaji { flex: 1 1 120px; min-width: 100px; }
+  .char-row .addline { white-space: nowrap; }
+
+  /* --- script list --- */
+  #scriptList { display: flex; flex-direction: column; gap: 8px; }
+  .item {
+    display: flex; gap: 8px; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px;
+  }
+  .item.dragging { opacity: .4; }
+  .item.drag-over-top { box-shadow: 0 -3px 0 0 var(--primary); }
+  .item.drag-over-bottom { box-shadow: 0 3px 0 0 var(--primary); }
+  .handle {
+    cursor: grab; user-select: none; color: var(--ink-soft);
+    display: flex; align-items: center; padding: 0 4px; font-size: 1rem;
+    touch-action: none;
+  }
+  .item .body { flex: 1; min-width: 0; }
+  .speaker-tag {
+    display: inline-block; font-size: .75rem; font-weight: 700;
+    color: #fff; border-radius: 4px; padding: 1px 8px; margin-bottom: 5px;
+  }
+  .item .side { display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+  .item.break-item {
+    background: repeating-linear-gradient(-45deg, #F2F3F7, #F2F3F7 8px, #E9EBF1 8px, #E9EBF1 16px);
+    align-items: center; color: var(--ink-soft); font-size: .8rem; font-weight: 700;
+    letter-spacing: .15em;
+  }
+  .break-label { flex: 1; text-align: center; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* --- settings --- */
+  .engine-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .engine-row label { font-size: .85rem; display: flex; align-items: center; gap: 5px; }
+  #geminiKeyWrap { margin-top: 10px; }
+  .hint { font-size: .75rem; color: var(--ink-soft); margin-top: 6px; }
+  .hint a { color: var(--primary); }
+
+  /* --- output --- */
+  #status { font-size: .85rem; margin: 10px 0; color: var(--ink-soft); min-height: 1.4em; }
+  #status.error { color: var(--danger); font-weight: 700; }
+  #status.ok { color: var(--ok); }
+  .out-page {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px 18px 14px; margin-bottom: 14px; position: relative;
+  }
+  .out-page::before {
+    content: attr(data-page);
+    position: absolute; top: 10px; right: 14px;
+    font-size: .7rem; color: var(--ink-soft); letter-spacing: .12em;
+  }
+  .out-page textarea {
+    width: 100%; min-height: 120px; font-size: .9rem;
+    background: #FCFCFD; line-height: 1.7;
+  }
+  .out-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .progress {
+    height: 5px; border-radius: 3px; background: #E3E6ED; overflow: hidden; margin-top: 8px; display: none;
+  }
+  .progress > div { height: 100%; width: 0%; background: var(--primary); transition: width .2s; }
+
+  footer { text-align: center; font-size: .72rem; color: var(--ink-soft); padding: 20px 0 40px; }
+  @media (max-width: 480px) {
+    .char-row input.name, .char-row input.romaji { flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>台本翻訳ツール<span class="sub">Script Translator · 日本語 → English</span></h1>
+  <div class="spacer"></div>
+  <button id="btnExportProject" title="プロジェクトをJSONで保存">書き出し</button>
+  <button id="btnImportProject" title="JSONを読み込み">読み込み</button>
+  <input type="file" id="importFile" accept=".json" style="display:none">
+</header>
+
+<main>
+  <!-- 登場人物 -->
+  <section class="panel">
+    <h2>登場人物</h2>
+    <div id="charList"></div>
+    <button id="btnAddChar">＋ 人物を追加</button>
+  </section>
+
+  <!-- 台本 -->
+  <section class="panel">
+    <h2>台本（ドラッグ or ▲▼ で並べ替え）</h2>
+    <div id="scriptList"></div>
+    <div class="toolbar">
+      <button id="btnAddBreak">─ ページ区切りを挿入 ─</button>
+    </div>
+  </section>
+
+  <!-- 翻訳設定 -->
+  <section class="panel">
+    <h2>翻訳設定</h2>
+    <div class="engine-row">
+      <label><input type="radio" name="engine" value="mymemory"> 無料API（MyMemory / キー不要・精度低め）</label>
+      <label><input type="radio" name="engine" value="gemini"> Gemini API（高精度・要APIキー）</label>
+    </div>
+    <div id="geminiKeyWrap" style="display:none">
+      <input type="text" id="geminiKey" placeholder="Gemini APIキーを入力（このブラウザにのみ保存されます）" autocomplete="off">
+      <div class="hint">キーは <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料取得できます。キーはlocalStorageに保存され、Google以外へ送信されません。</div>
+    </div>
+    <div class="toolbar">
+      <button id="btnTranslate" class="primary">翻 訳</button>
+    </div>
+    <div class="progress" id="progress"><div></div></div>
+    <div id="status"></div>
+  </section>
+
+  <!-- 翻訳結果 -->
+  <section class="panel" id="outputPanel" style="display:none">
+    <h2>翻訳結果</h2>
+    <div id="outputList"></div>
+    <div class="toolbar">
+      <button id="btnCopyAll">すべてコピー</button>
+      <button id="btnDownloadTxt">.txt で保存</button>
+    </div>
+  </section>
+</main>
+
+<footer>データは自動的にこのブラウザ（localStorage）へ保存されます。</footer>
+
+<script>
+"use strict";
+
+/* ================= state ================= */
+const CHAR_COLORS = ["#D1495B","#0F8B8D","#3A5199","#C77D1B","#7A5CA8","#2E7D4F","#B04A98","#5A6B7A"];
+const LS_KEY = "scriptTranslatorData_v1";
+
+let state = {
+  chars: [],          // {id, name, romaji, color}
+  items: [],          // {id, type:"line", charId, text} | {id, type:"break"}
+  engine: "mymemory",
+  geminiKey: ""
+};
+let uid = 1;
+const newId = () => "i" + (uid++) + "_" + Date.now().toString(36);
+
+let lastResult = null; // [{pageNo, text}]
+
+/* ================= persistence ================= */
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }, 400);
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.chars) && Array.isArray(d.items)) state = Object.assign(state, d);
+    }
+  } catch (e) {}
+}
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function charById(id) { return state.chars.find(c => c.id === id); }
+function speakerName(c) {
+  if (!c) return "？";
+  return (c.romaji && c.romaji.trim()) ? c.romaji.trim() : (c.name || "？");
+}
+
+/* ================= characters ================= */
+function addChar() {
+  const color = CHAR_COLORS[state.chars.length % CHAR_COLORS.length];
+  state.chars.push({ id: newId(), name: "", romaji: "", color });
+  renderChars();
+  scheduleSave();
+}
+function removeChar(id) {
+  const used = state.items.some(it => it.type === "line" && it.charId === id);
+  if (used && !confirm("この人物のセリフも一緒に削除されます。よろしいですか？")) return;
+  state.items = state.items.filter(it => !(it.type === "line" && it.charId === id));
+  state.chars = state.chars.filter(c => c.id !== id);
+  renderChars(); renderScript();
+  scheduleSave();
+}
+function renderChars() {
+  const wrap = $("#charList");
+  wrap.innerHTML = "";
+  state.chars.forEach(c => {
+    const row = document.createElement("div");
+    row.className = "char-row";
+    row.innerHTML =
+      '<span class="char-dot" style="background:' + c.color + '"></span>' +
+      '<input class="name" type="text" placeholder="名前（日本語）" value="' + esc(c.name) + '">' +
+      '<input class="romaji" type="text" placeholder="ローマ字表記（例: Rin）" value="' + esc(c.romaji) + '">' +
+      '<button class="addline">＋ セリフ</button>' +
+      '<button class="ghost-danger del">削除</button>';
+    row.querySelector(".name").addEventListener("input", e => {
+      c.name = e.target.value;
+      updateSpeakerTags(c);
+      scheduleSave();
+    });
+    row.querySelector(".romaji").addEventListener("input", e => {
+      c.romaji = e.target.value;
+      updateSpeakerTags(c);
+      scheduleSave();
+    });
+    row.querySelector(".addline").addEventListener("click", () => addLine(c.id));
+    row.querySelector(".del").addEventListener("click", () => removeChar(c.id));
+    wrap.appendChild(row);
+  });
+}
+function updateSpeakerTags(c) {
+  document.querySelectorAll('[data-char-label="' + c.id + '"]').forEach(el => {
+    el.textContent = c.name || "（名前未設定）";
+  });
+}
+
+/* ================= script items ================= */
+function addLine(charId) {
+  state.items.push({ id: newId(), type: "line", charId, text: "" });
+  renderScript();
+  scheduleSave();
+  // 追加したセリフ欄にフォーカス
+  const items = document.querySelectorAll("#scriptList textarea");
+  if (items.length) items[items.length - 1].focus();
+}
+function addBreak() {
+  state.items.push({ id: newId(), type: "break" });
+  renderScript();
+  scheduleSave();
+}
+function removeItem(id) {
+  state.items = state.items.filter(it => it.id !== id);
+  renderScript();
+  scheduleSave();
+}
+function moveItem(id, dir) {
+  const i = state.items.findIndex(it => it.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= state.items.length) return;
+  const [it] = state.items.splice(i, 1);
+  state.items.splice(j, 0, it);
+  renderScript();
+  scheduleSave();
+}
+
+function renderScript() {
+  const list = $("#scriptList");
+  list.innerHTML = "";
+  if (!state.items.length) {
+    list.innerHTML = '<div class="hint">人物の「＋ セリフ」ボタンでセリフを追加してください。</div>';
+    return;
+  }
+  state.items.forEach(it => {
+    const el = document.createElement("div");
+    el.className = "item" + (it.type === "break" ? " break-item" : "");
+    el.dataset.id = it.id;
+
+    if (it.type === "break") {
+      el.innerHTML =
+        '<span class="handle" title="ドラッグで移動">⠿</span>' +
+        '<span class="break-label">── ページ区切り ──</span>' +
+        '<div class="side">' +
+          '<button class="icon up" title="上へ">▲</button>' +
+          '<button class="icon down" title="下へ">▼</button>' +
+          '<button class="ghost-danger del">削除</button>' +
+        '</div>';
+    } else {
+      const c = charById(it.charId);
+      const color = c ? c.color : "#888";
+      const name = c ? (c.name || "（名前未設定）") : "（削除された人物）";
+      el.innerHTML =
+        '<span class="handle" title="ドラッグで移動">⠿</span>' +
+        '<div class="body">' +
+          '<span class="speaker-tag" style="background:' + color + '" data-char-label="' + (c ? c.id : "") + '">' + esc(name) + '</span>' +
+          '<textarea placeholder="セリフを入力（日本語）">' + esc(it.text) + '</textarea>' +
+        '</div>' +
+        '<div class="side">' +
+          '<button class="icon up" title="上へ">▲</button>' +
+          '<button class="icon down" title="下へ">▼</button>' +
+          '<button class="ghost-danger del">削除</button>' +
+        '</div>';
+      const ta = el.querySelector("textarea");
+      // 入力中はDOMを再構築しない → IME・フォーカス問題を回避
+      ta.addEventListener("input", e => { it.text = e.target.value; scheduleSave(); });
+    }
+    el.querySelector(".up").addEventListener("click", () => moveItem(it.id, -1));
+    el.querySelector(".down").addEventListener("click", () => moveItem(it.id, +1));
+    el.querySelector(".del").addEventListener("click", () => removeItem(it.id));
+    setupDrag(el);
+    list.appendChild(el);
+  });
+}
+
+/* ================= drag & drop ================= */
+let dragId = null;
+function setupDrag(el) {
+  const handle = el.querySelector(".handle");
+  handle.addEventListener("mousedown", () => { el.draggable = true; });
+  handle.addEventListener("mouseup",   () => { el.draggable = false; });
+  el.addEventListener("dragstart", e => {
+    dragId = el.dataset.id;
+    el.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", dragId); } catch (err) {}
+  });
+  el.addEventListener("dragend", () => {
+    el.classList.remove("dragging");
+    el.draggable = false;
+    clearDragMarks();
+    dragId = null;
+  });
+  el.addEventListener("dragover", e => {
+    if (!dragId || dragId === el.dataset.id) return;
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    clearDragMarks();
+    el.classList.add(before ? "drag-over-top" : "drag-over-bottom");
+  });
+  el.addEventListener("drop", e => {
+    if (!dragId || dragId === el.dataset.id) return;
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    const from = state.items.findIndex(it => it.id === dragId);
+    if (from < 0) return;
+    const [moved] = state.items.splice(from, 1);
+    let to = state.items.findIndex(it => it.id === el.dataset.id);
+    if (!before) to += 1;
+    state.items.splice(to, 0, moved);
+    renderScript();
+    scheduleSave();
+  });
+}
+function clearDragMarks() {
+  document.querySelectorAll(".drag-over-top,.drag-over-bottom")
+    .forEach(x => x.classList.remove("drag-over-top", "drag-over-bottom"));
+}
+
+/* ================= translation ================= */
+function setStatus(msg, cls) {
+  const st = $("#status");
+  st.textContent = msg || "";
+  st.className = cls || "";
+}
+function setProgress(ratio) {
+  const bar = $("#progress");
+  bar.style.display = ratio == null ? "none" : "block";
+  if (ratio != null) bar.firstElementChild.style.width = Math.round(ratio * 100) + "%";
+}
+
+function collectPages() {
+  // pages: [ [ {romaji, text, ref} ] ]
+  const pages = [[]];
+  state.items.forEach(it => {
+    if (it.type === "break") { pages.push([]); return; }
+    const t = (it.text || "").trim();
+    if (!t) return;
+    pages[pages.length - 1].push({ speaker: speakerName(charById(it.charId)), text: t });
+  });
+  return pages;
+}
+
+async function translateMyMemory(lines, onProgress) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const url = "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(lines[i]) + "&langpair=ja|en";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("MyMemory API エラー (" + res.status + ")");
+    const data = await res.json();
+    if (data.responseStatus && data.responseStatus !== 200) {
+      throw new Error("MyMemory: " + (data.responseDetails || "利用上限に達した可能性があります"));
+    }
+    out.push(data.responseData.translatedText || "");
+    onProgress((i + 1) / lines.length);
+    await new Promise(r => setTimeout(r, 250)); // レート制限対策
+  }
+  return out;
+}
+
+async function translateGemini(entries) {
+  const key = state.geminiKey.trim();
+  if (!key) throw new Error("Gemini APIキーを入力してください。");
+  const numbered = entries.map((e, i) => i + ". " + e.speaker + ": " + e.text).join("\n");
+  const prompt =
+    "あなたはゲームシナリオの翻訳者です。以下の日本語台本の各セリフを、話者の口調と文脈を踏まえた自然な英語に翻訳してください。\n" +
+    "出力は次のJSON形式のみで、コードブロックや説明文は一切付けないでください:\n" +
+    '{"translations": ["0番目の英訳", "1番目の英訳", ...]}\n' +
+    "配列の要素数は入力のセリフ数（" + entries.length + "件）と必ず一致させてください。\n\n" +
+    "入力（番号. 話者: セリフ）:\n" + numbered;
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+    encodeURIComponent(key),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3 }
+      })
+    }
+  );
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).error.message; } catch (e) {}
+    throw new Error("Gemini API エラー (" + res.status + ") " + detail);
+  }
+  const data = await res.json();
+  const text = (((data.candidates || [])[0] || {}).content || {}).parts?.[0]?.text || "";
+  const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); }
+  catch (e) { throw new Error("Geminiの応答を解析できませんでした。もう一度お試しください。"); }
+  if (!parsed.translations || parsed.translations.length !== entries.length) {
+    throw new Error("翻訳数が一致しませんでした。もう一度お試しください。");
+  }
+  return parsed.translations;
+}
+
+async function doTranslate() {
+  const pages = collectPages();
+  const flat = [];
+  pages.forEach((page, pi) => page.forEach(e => flat.push({ ...e, page: pi })));
+  if (!flat.length) { setStatus("翻訳するセリフがありません。", "error"); return; }
+
+  const btn = $("#btnTranslate");
+  btn.disabled = true;
+  setStatus("翻訳中…（" + flat.length + "件）");
+  setProgress(0);
+
+  try {
+    let translations;
+    if (state.engine === "gemini") {
+      setProgress(null);
+      translations = await translateGemini(flat);
+    } else {
+      translations = await translateMyMemory(flat.map(e => e.text), setProgress);
+    }
+    // ページごとに再構成
+    lastResult = pages.map((page, pi) => {
+      const lines = [];
+      flat.forEach((e, i) => {
+        if (e.page === pi) lines.push(e.speaker + ": " + translations[i]);
+      });
+      return { pageNo: pi + 1, text: lines.join("\n") };
+    });
+    renderOutput();
+    setStatus("翻訳が完了しました。", "ok");
+  } catch (err) {
+    setStatus(err.message || "翻訳に失敗しました。", "error");
+  } finally {
+    btn.disabled = false;
+    setProgress(null);
+  }
+}
+
+/* ================= output ================= */
+function renderOutput() {
+  const panel = $("#outputPanel");
+  const list = $("#outputList");
+  list.innerHTML = "";
+  if (!lastResult) { panel.style.display = "none"; return; }
+  lastResult.forEach(pg => {
+    const div = document.createElement("div");
+    div.className = "out-page";
+    div.setAttribute("data-page", "PAGE " + pg.pageNo);
+    const ta = document.createElement("textarea");
+    ta.value = pg.text;
+    ta.readOnly = true;
+    const actions = document.createElement("div");
+    actions.className = "out-actions";
+    const btn = document.createElement("button");
+    btn.textContent = "このページをコピー";
+    btn.addEventListener("click", () => copyText(pg.text, btn));
+    actions.appendChild(btn);
+    div.appendChild(ta);
+    div.appendChild(actions);
+    list.appendChild(div);
+  });
+  panel.style.display = "";
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function copyText(text, btn) {
+  const done = () => {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = "コピーしました ✓";
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta);
+  done();
+}
+
+function allResultText() {
+  if (!lastResult) return "";
+  return lastResult.map(pg => "===== PAGE " + pg.pageNo + " =====\n" + pg.text).join("\n\n");
+}
+
+/* ================= project import/export ================= */
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+/* ================= init ================= */
+function init() {
+  load();
+  if (!state.chars.length) addChar(); else renderChars();
+  renderScript();
+
+  // engine
+  document.querySelectorAll('input[name="engine"]').forEach(r => {
+    r.checked = (r.value === state.engine);
+    r.addEventListener("change", () => {
+      state.engine = r.value;
+      $("#geminiKeyWrap").style.display = state.engine === "gemini" ? "" : "none";
+      scheduleSave();
+    });
+  });
+  $("#geminiKeyWrap").style.display = state.engine === "gemini" ? "" : "none";
+  $("#geminiKey").value = state.geminiKey || "";
+  $("#geminiKey").addEventListener("input", e => { state.geminiKey = e.target.value; scheduleSave(); });
+
+  $("#btnAddChar").addEventListener("click", addChar);
+  $("#btnAddBreak").addEventListener("click", addBreak);
+  $("#btnTranslate").addEventListener("click", doTranslate);
+  $("#btnCopyAll").addEventListener("click", e => copyText(allResultText(), e.target));
+  $("#btnDownloadTxt").addEventListener("click", () => {
+    if (lastResult) download("translation.txt", allResultText());
+  });
+
+  $("#btnExportProject").addEventListener("click", () => {
+    download("script-project.json", JSON.stringify(state, null, 2), "application/json");
+  });
+  $("#btnImportProject").addEventListener("click", () => $("#importFile").click());
+  $("#importFile").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result);
+        if (!d || !Array.isArray(d.chars) || !Array.isArray(d.items)) throw new Error();
+        state = Object.assign({ engine: "mymemory", geminiKey: "" }, d);
+        renderChars(); renderScript();
+        document.querySelectorAll('input[name="engine"]').forEach(r => r.checked = (r.value === state.engine));
+        $("#geminiKeyWrap").style.display = state.engine === "gemini" ? "" : "none";
+        $("#geminiKey").value = state.geminiKey || "";
+        scheduleSave();
+        setStatus("プロジェクトを読み込みました。", "ok");
+      } catch (err) {
+        setStatus("読み込みに失敗しました。ファイル形式を確認してください。", "error");
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  });
+}
+init();
+</script>
+</body>
+</html>
